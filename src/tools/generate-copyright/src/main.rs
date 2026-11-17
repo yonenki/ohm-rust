@@ -15,7 +15,6 @@ mod cargo_metadata;
 ///
 /// Run `x.py run generate-copyright`
 fn main() -> Result<(), Error> {
-    let cargo_home = env_path("CARGO_HOME")?;
     let dest_file = env_path("DEST")?;
     let libstd_dest_file = env_path("DEST_LIBSTD")?;
     let src_dir = env_path("SRC_DIR")?;
@@ -42,7 +41,6 @@ fn main() -> Result<(), Error> {
     // Scan Cargo dependencies
     let mut collected_cargo_metadata = cargo_metadata::get_metadata_and_notices(
         &cargo,
-        &cargo_home,
         &vendor_dir,
         &src_dir,
         &cargo_manifests,
@@ -50,7 +48,6 @@ fn main() -> Result<(), Error> {
 
     let library_collected_cargo_metadata = cargo_metadata::get_metadata_and_notices(
         &cargo,
-        &cargo_home,
         &vendor_dir,
         &src_dir,
         &library_manifests,

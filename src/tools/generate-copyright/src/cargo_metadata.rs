@@ -46,12 +46,11 @@ pub struct PackageMetadata {
 /// covered it already.
 pub fn get_metadata_and_notices(
     cargo: &Path,
-    cargo_home_path: &Path,
     vendor_path: &Path,
     root_path: &Path,
     manifest_paths: &[PathBuf],
 ) -> Result<BTreeMap<Package, PackageMetadata>, Error> {
-    let mut output = get_metadata(cargo, cargo_home_path, root_path, manifest_paths)?;
+    let mut output = get_metadata(cargo, root_path, manifest_paths)?;
 
     // Now for each dependency we found, go and grab any important looking files
     for (package, metadata) in output.iter_mut() {
@@ -63,11 +62,11 @@ pub fn get_metadata_and_notices(
 
 /// Use `cargo metadata` to get a list of dependencies and their license data.
 ///
-/// Any dependency with a path beginning with `root_path` is ignored, as we
-/// assume `reuse` has covered it already.
+/// Any path dependency beginning with `root_path` is ignored, as we assume
+/// `reuse` has covered it already. Registry and Git packages always count as
+/// out-of-tree, even when `CARGO_HOME` lies inside `root_path` or contains it.
 pub fn get_metadata(
     cargo: &Path,
-    cargo_home_path: &Path,
     root_path: &Path,
     manifest_paths: &[PathBuf],
 ) -> Result<BTreeMap<Package, PackageMetadata>, Error> {
@@ -85,9 +84,7 @@ pub fn get_metadata(
         for package in metadata.packages {
             let package_manifest_path = package.manifest_path.as_path();
 
-            if package_manifest_path.starts_with(root_path)
-                && !package_manifest_path.starts_with(cargo_home_path)
-            {
+            if package.source.is_none() && package_manifest_path.starts_with(root_path) {
                 // it's an in-tree dependency and reuse covers it
                 continue;
             }
