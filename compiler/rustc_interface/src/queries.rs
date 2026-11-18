@@ -136,6 +136,7 @@ impl Linker {
                 incr_comp_session.as_ref(),
                 &self.dep_graph,
                 work_products,
+                self.metadata.path(),
             )
         });
 

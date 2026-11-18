@@ -123,11 +123,14 @@ fn replace_in_working_directory(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 /// Saves the work product index.
+///
+/// `metadata_output` is the output rmeta that the `metadata` work product was linked from.
 pub fn save_work_product_index(
     sess: &Session,
     incr_comp_session: Option<&IncrCompSession>,
     dep_graph: &DepGraph,
     mut new_work_products: WorkProductMap,
+    metadata_output: Option<&Path>,
 ) {
     if sess.opts.incremental.is_none() {
         return;
@@ -153,7 +156,12 @@ pub fn save_work_product_index(
     });
 
     if sess.opts.unstable_opts.ohm_shared_stages {
-        save_metadata_checkpoint(sess, incr_comp_session.unwrap(), &new_work_products);
+        save_metadata_checkpoint(
+            sess,
+            incr_comp_session.unwrap(),
+            &new_work_products,
+            metadata_output,
+        );
     }
 
     // We also need to clean out old work-products, as not all of them are
@@ -188,6 +196,7 @@ fn save_metadata_checkpoint(
     sess: &Session,
     session: &IncrCompSession,
     work_products: &WorkProductMap,
+    metadata_output: Option<&Path>,
 ) {
     let (stage, index_filename) = if sess.opts.output_types.should_codegen() {
         ("build", BUILD_METADATA)
@@ -203,11 +212,20 @@ fn save_metadata_checkpoint(
         let files = std::mem::take(&mut product.saved_files);
         for (extension, filename) in files.into_sorted_stable_ord() {
             let saved = format!("ohm-{stage}-{filename}");
-            if rustc_fs_util::link_or_copy(
-                in_incr_comp_dir_sess(session, &filename),
-                in_incr_comp_dir_sess(session, &saved),
-            )
-            .is_err()
+            let session_file;
+            // The session's metadata file is another name of the output rmeta, which this
+            // compiler and pipelined dependents keep open. ReFS refuses to rename a directory
+            // once one of its names was opened while the file is open through another name,
+            // so opening the session name here would leave the session unfinalized.
+            let source = match metadata_output {
+                Some(output) if product.cgu_name == "metadata" && extension == "rmeta" => output,
+                _ => {
+                    session_file = in_incr_comp_dir_sess(session, &filename);
+                    session_file.as_path()
+                }
+            };
+            if rustc_fs_util::link_or_copy(source, in_incr_comp_dir_sess(session, &saved))
+                .is_err()
             {
                 // This optional optimization must not publish a partial checkpoint.
                 let _ = fs::remove_file(in_incr_comp_dir_sess(session, index_filename));
